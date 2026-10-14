@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisador e Codificador de Senhas</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #1a1a1a;
+            text-align: center;
+        }
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 8px;
+            color: #444;
+        }
+        input[type="password"], input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+        .strength-meter {
+            height: 10px;
+            background-color: #eee;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        .strength-bar {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s, background-color 0.3s;
+        }
+        .info-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 12px;
+            margin-top: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .hash-output {
+            word-break: break-all;
+            font-family: monospace;
+            background: #272822;
+            color: #a6e22e;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .status-text {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>🔒 Analisador de Senhas</h2>
+
+        <label for="passwordInput">Digite sua Senha:</label>
+        <input type="password" id="passwordInput" placeholder="Digite aqui..." oninput="analyzePassword()">
+
+        <div class="strength-meter">
+            <div id="strengthBar" class="strength-bar"></div>
+        </div>
+        <div id="statusText" class="status-text">Digite uma senha para iniciar</div>
+
+        <div class="info-box">
+            <strong>📊 Estatísticas:</strong>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>Comprimento: <span id="charCount">0</span> caracteres</li>
+                <li>Entropia Estimada: <span id="entropyVal">0</span> bits</li>
+            </ul>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <label>🔑 Hash Gerado (SHA-256 / Criptografia Unidirecional):</label>
+            <div id="hashOutput" class="hash-output">Aguardando entrada...</div>
+        </div>
+    </div>
+
+    <script>
+        async function analyzePassword() {
+            const pwd = document.getElementById("passwordInput").value;
+            const bar = document.getElementById("strengthBar");
+            const status = document.getElementById("statusText");
+            const charCount = document.getElementById("charCount");
+            const entropyVal = document.getElementById("entropyVal");
+            const hashOutput = document.getElementById("hashOutput");
+
+            charCount.textContent = pwd.length;
+
+            if (pwd.length === 0) {
+                bar.style.width = "0%";
+                status.textContent = "Digite uma senha para iniciar";
+                status.style.color = "#000";
+                entropyVal.textContent = "0";
+                hashOutput.textContent = "Aguardando entrada...";
+                return;
+            }
+
+            // 1. Cálculo do Espaço de Caracteres e Entropia (Bits)
+            let charsetSize = 0;
+            if (/[a-z]/.test(pwd)) charsetSize += 26;
+            if (/[A-Z]/.test(pwd)) charsetSize += 26;
+            if (/[0-9]/.test(pwd)) charsetSize += 10;
+            if (/[^a-zA-Z0-9]/.test(pwd)) charsetSize += 32;
+
+            const entropy = pwd.length * Math.log2(charsetSize || 1);
+            entropyVal.textContent = entropy.toFixed(1);
+
+            // 2. Classificação da Força
+            if (entropy < 28) {
+                bar.style.width = "25%";
+                bar.style.backgroundColor = "#dc3545";
+                status.textContent = "🔴 Senha Muito Fraca";
+                status.style.color = "#dc3545";
+            } else if (entropy < 50) {
+                bar.style.width = "50%";
+                bar.style.backgroundColor = "#ffc107";
+                status.textContent = "🟡 Senha Moderada";
+                status.style.color = "#856404";
+            } else if (entropy < 75) {
+                bar.style.width = "75%";
+                bar.style.backgroundColor = "#17a2b8";
+                status.textContent = "🟢 Senha Forte";
+                status.style.color = "#17a2b8";
+            } else {
+                bar.style.width = "100%";
+                bar.style.backgroundColor = "#28a745";
+                status.textContent = "🛡️ Senha Muito Forte!";
+                status.style.color = "#28a745";
+            }
+
+            // 3. Codificação/Hashing em SHA-256 (Web Crypto API)
+            const hashHex = await generateSHA256(pwd);
+            hashOutput.textContent = hashHex;
+        }
+
+        // Função nativa do navegador para calcular SHA-256
+        async function generateSHA256(message) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashHex;
+        }
+    </script>
+
+</body>
+</html>
